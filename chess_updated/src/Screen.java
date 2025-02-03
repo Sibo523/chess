@@ -1,293 +1,186 @@
+// Screen.java
+import javax.swing.*;
+import javax.swing.border.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
-import javax.swing.*;
-import javax.swing.border.*;
-import java.net.Proxy;
 import java.net.URL;
+import java.util.ArrayList;
+import java.util.List;
 import javax.imageio.ImageIO;
 
 public class Screen {
-    Board b ;
-    boolean flag = false,first = false;
-    cord fir;
-
+    private Board board;
+    private boolean pieceSelected = false;
+    private Coordinate selectedCoord;
+    private List<Coordinate> highlightedMoves = new ArrayList<>();
+    
     private final JPanel gui = new JPanel(new BorderLayout(3, 3));
-    private JButton[][] chessBoardSquares = new JButton[8][8];
-    private Image[][] chessPieceImages = new Image[2][6];
+    private JButton[][] boardSquares = new JButton[Board.SIZE][Board.SIZE];
+    private Image[][] pieceImages = new Image[2][6];
     private JPanel chessBoard;
-
-    private final JLabel message = new JLabel(
-            "Chess sabon is ready to play!");
-    private static final String COLS = "ABCDEFGH";
-    public static final int QUEEN = 0, KING = 1,
-            ROOK = 2, KNIGHT = 3, BISHOP = 4, PAWN = 5;
-    public static final int[] STARTING_ROW = {
-            ROOK, KNIGHT, BISHOP, KING, QUEEN, BISHOP, KNIGHT, ROOK
-    };
-    public static final int BLACK = 0, WHITE = 1;
-
-    Screen() throws Exception {
+    private final JLabel message = new JLabel("Welcome! White's turn.");
+    
+    // Mapping indices for the sprite sheet.
+    private static final int KING = 0, QUEEN = 1, ROOK = 2, KNIGHT = 3, BISHOP = 4, PAWN = 5;
+    
+    public Screen() throws Exception {
         initializeGui();
+        board = new Board();
+        updateBoardUI();
     }
-
-
-    public final void initializeGui() throws Exception {
-        // create the images for the chess pieces
-        createImages();
-
-        // set up the main GUI
+    
+    private void initializeGui() throws Exception {
+        createPieceImages();
         gui.setBorder(new EmptyBorder(5, 5, 5, 5));
-        JToolBar tools = new JToolBar();
-        tools.setFloatable(false);
-        gui.add(tools, BorderLayout.PAGE_START);
+        
+        JToolBar toolBar = new JToolBar();
+        toolBar.setFloatable(false);
+        gui.add(toolBar, BorderLayout.PAGE_START);
+        
         Action newGameAction = new AbstractAction("New") {
             @Override
             public void actionPerformed(ActionEvent e) {
-                setupNewGame();
-                b = new Board();
-                flag = false;
-              //  b.print();
+                board = new Board();
+                updateBoardUI();
+                message.setText("New game started! White's turn.");
             }
         };
-        tools.add(new JButton(new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-
-            }
-        }));
-        tools.add(newGameAction);
-        tools.add(new JButton("Save")); // TODO - add functionality!
-        tools.add(new JButton("Restore")); // TODO - add functionality!
-        tools.addSeparator();
-        tools.add(new JButton("Resign")); // TODO - add functionality!
-        tools.addSeparator();
-        tools.add(message);
-
-        gui.add(new JLabel("?"), BorderLayout.LINE_START);
-
-        chessBoard = new JPanel(new GridLayout(0, 9)) {
-
-            /**
-             * Override the preferred size to return the largest it can, in
-             * a square shape.  Must (must, must) be added to a GridBagLayout
-             * as the only component (it uses the parent as a guide to size)
-             * with no GridBagConstaint (so it is centered).
-             */
-            @Override
-            public final Dimension getPreferredSize() {
-                Dimension d = super.getPreferredSize();
-                Dimension prefSize = null;
-                Component c = getParent();
-                if (c == null) {
-                    prefSize = new Dimension(
-                            (int) d.getWidth(), (int) d.getHeight());
-                } else if (c != null &&
-                        c.getWidth() > d.getWidth() &&
-                        c.getHeight() > d.getHeight()) {
-                    prefSize = c.getSize();
-                } else {
-                    prefSize = d;
-                }
-                int w = (int) prefSize.getWidth();
-                int h = (int) prefSize.getHeight();
-                // the smaller of the two sizes
-                int s = (w > h ? h : w);
-                return new Dimension(s, s);
-            }
-        };
+        toolBar.add(newGameAction);
+        toolBar.add(new JButton("Save"));      // (Optional: add functionality)
+        toolBar.add(new JButton("Restore"));   // (Optional: add functionality)
+        toolBar.addSeparator();
+        toolBar.add(new JButton("Resign"));    // (Optional: add functionality)
+        toolBar.addSeparator();
+        toolBar.add(message);
+        
+        chessBoard = new JPanel(new GridLayout(Board.SIZE, Board.SIZE));
         chessBoard.setBorder(new CompoundBorder(
                 new EmptyBorder(8, 8, 8, 8),
                 new LineBorder(Color.BLACK)
         ));
-        // Set the BG to be ochre
-        Color ochre = new Color(173, 216, 230);
-        chessBoard.setBackground(ochre);
-        JPanel boardConstrain = new JPanel(new GridBagLayout());
-        boardConstrain.setBackground(ochre);
-        boardConstrain.add(chessBoard);
-        gui.add(boardConstrain);
-
-        // create the chess board squares
-        Insets buttonMargin = new Insets(0, 0, 0, 0);
-        for (int ii = 0; ii < chessBoardSquares.length; ii++) {
-            for (int jj = 0; jj < chessBoardSquares[ii].length; jj++) {
-                JButton b = new JButton();
-                b.setMargin(buttonMargin);
-                // our chess pieces are 64x64 px in size, so we'll
-                // 'fill this in' using a transparent icon..
-                final int y = ii;
-                final int x = jj;
-                b.addActionListener(new ActionListener() {
-                    @Override
-                    public void actionPerformed(ActionEvent e) {
-                        try {
-                            buttonPressed(y, x);
-                        } catch (Exception ex) {
-                            throw new RuntimeException(ex);
-                        }
-                    }
-
-                });
-
-                ImageIcon icon = new ImageIcon(new BufferedImage(64, 64, BufferedImage.TYPE_INT_ARGB));
-                b.setIcon(icon);
-                if ((jj % 2 == 1 && ii % 2 == 1)
-                        //) {
-                        || (jj % 2 == 0 && ii % 2 == 0)) {
-                    b.setBackground(Color.WHITE);
-                } else {
-                    b.setBackground(Color.BLACK);
-                }
-                chessBoardSquares[jj][ii] = b;
+        
+        // Create board squares.
+        for (int y = Board.SIZE - 1; y >= 0; y--) {
+            for (int x = 0; x < Board.SIZE; x++) {
+                JButton square = new JButton();
+                square.setMargin(new Insets(0, 0, 0, 0));
+                final int cx = x, cy = y;
+                square.addActionListener(e -> buttonPressed(cx, cy));
+                boardSquares[x][y] = square;
+                // Color alternating squares.
+                if ((x + y) % 2 == 0)
+                    square.setBackground(Color.WHITE);
+                else
+                    square.setBackground(Color.GRAY);
+                chessBoard.add(square);
             }
         }
-
-        /*
-         * fill the chess board
-         */
-        chessBoard.add(new JLabel(""));
-        // fill the top row
-        for (int ii = 0; ii < 8; ii++) {
-            chessBoard.add(
-                    new JLabel(COLS.substring(ii, ii + 1),
-                            SwingConstants.CENTER));
-        }
-        // fill the black non-pawn piece row
-        for (int ii = 0; ii < 8; ii++) {
-            for (int jj = 0; jj < 8; jj++) {
-                switch (jj) {
-                    case 0:
-                        chessBoard.add(new JLabel("" + (9 - (ii + 1)),
-                                SwingConstants.CENTER));
-                    default:
-                        chessBoard.add(chessBoardSquares[jj][ii]);
-                }
-            }
-        }
+        gui.add(chessBoard, BorderLayout.CENTER);
     }
-
-    private void buttonPressed(int row, int col) throws Exception {
-        JButton clickedButton = chessBoardSquares[col][row];
-       // System.out.println("Button pressed at row: " + row + ", col: " + col);
-        // You can do additional processing or logic here based on the button press
-        if (!flag) {
-            // Select the source square
-            if (b.extract(new cord(col,row)) != null) {
-                fir = new cord(col, row);
-                flag = true;
+    
+    private void buttonPressed(int x, int y) {
+        Coordinate coord = new Coordinate(x, y);
+        // Clear previous highlights.
+        clearHighlights();
+        
+        if (!pieceSelected) {
+            Piece p = board.getPieceAt(coord);
+            // Only select a piece if it belongs to the side whose turn it is.
+            if (p != null && p.isBlack() == board.getTurnString().equals("Black")) {
+                selectedCoord = coord;
+                pieceSelected = true;
+                highlightSquare(coord, Color.YELLOW);
+                // Highlight legal moves.
+                List<Coordinate> moves = p.getValidMoves(board);
+                // (Optional: you may filter out moves that leave the king in check.)
+                for (Coordinate m : moves) {
+                    highlightSquare(m, Color.CYAN);
+                    highlightedMoves.add(m);
+                }
+                message.setText(board.getTurnString() + " selected piece at " +
+                        (char)('A' + x) + (y + 1) + ".");
             }
         } else {
-            // Move the piece and update the board
-            if (b.move(fir, new cord(col, row))) {
-                b.setTurn();
-                // Update the graphical representation (UI)
-                Piece temp = b.extract(new cord(col,row));
-                int key = translator(temp.getKey());
-                int black = blacky(temp.isBlack());
-                ImageIcon icon = new ImageIcon(chessPieceImages[black][key]); // they don't have the same key
-                chessBoardSquares[col][row].setIcon(icon);
-                chessBoardSquares[fir.getX()][fir.getY()].setIcon(null);
-                //b.print();
-                // Clear the source selection
-                flag = false;
+            // Attempt to move the selected piece.
+            if (board.movePiece(selectedCoord, coord)) {
+                updateBoardUI();
+                message.setText(board.getTurnString() + "'s turn.");
+            } else {
+                message.setText("Illegal move. " + board.getTurnString() + "'s turn.");
             }
-            flag = false;
+            pieceSelected = false;
         }
     }
-    public int blacky(boolean black){
-        if(black){
-            return 1;
+    
+    // Highlight a square with a colored border.
+    private void highlightSquare(Coordinate coord, Color color) {
+        JButton button = boardSquares[coord.getX()][coord.getY()];
+        button.setBorder(new LineBorder(color, 3));
+    }
+    
+    // Clear all square highlights.
+    private void clearHighlights() {
+        for (int y = 0; y < Board.SIZE; y++) {
+            for (int x = 0; x < Board.SIZE; x++) {
+                boardSquares[x][y].setBorder(UIManager.getBorder("Button.border"));
+            }
         }
-        return 0;
+        highlightedMoves.clear();
     }
-    public int translator(int key){
-        if(key == 1 ){return 5;} // it's a pawn
-        if(key == 2){ return 2;} // it's a rook
-        if(key == 3){ return 3;} // it's a knight
-        if(key == 4){ return 4;} //it's a bish
-        if(key == 5){ return 1;} // it's a queen
-        if(key == 6){ return 0;} //it's a king
-        System.out.println("A problem has accured");
-        return 8;
+    
+    private void updateBoardUI() {
+        clearHighlights();
+        for (int y = 0; y < Board.SIZE; y++) {
+            for (int x = 0; x < Board.SIZE; x++) {
+                Piece p = board.getPieceAt(new Coordinate(x, y));
+                JButton square = boardSquares[x][y];
+                if (p != null) {
+                    int colorIndex = p.isBlack() ? 1 : 0;
+                    int pieceIndex;
+                    if (p instanceof King) pieceIndex = KING;
+                    else if (p instanceof Queen) pieceIndex = QUEEN;
+                    else if (p instanceof Rook) pieceIndex = ROOK;
+                    else if (p instanceof Knight) pieceIndex = KNIGHT;
+                    else if (p instanceof Bishop) pieceIndex = BISHOP;
+                    else if (p instanceof Pawn) pieceIndex = PAWN;
+                    else pieceIndex = PAWN;
+                    square.setIcon(new ImageIcon(pieceImages[colorIndex][pieceIndex]));
+                } else {
+                    square.setIcon(null);
+                }
+            }
+        }
     }
-
-    public final JComponent getGui() {
+    
+    private void createPieceImages() throws Exception {
+        // Load the sprite sheet from a URL (adjust as needed).
+        URL url = new URL("https://i.stack.imgur.com/memI0.png");
+        BufferedImage bi = ImageIO.read(url);
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 6; j++) {
+                pieceImages[i][j] = bi.getSubimage(j * 64, i * 64, 64, 64);
+            }
+        }
+    }
+    
+    public JComponent getGui() {
         return gui;
     }
-
-    private final void createImages() {
-        try {
-            URL url = new URL("https://i.stack.imgur.com/memI0.png");
-            BufferedImage bi = ImageIO.read(url);
-            for (int ii = 0; ii < 2; ii++) {
-                for (int jj = 0; jj < 6; jj++) {
-                    chessPieceImages[ii][jj] = bi.getSubimage(
-                            jj * 64, ii * 64, 64, 64);
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            System.exit(1);
-        }
-    }
-
-    /**
-     * Initializes the icons of the initial chess board piece places
-     */
-    private final void setupNewGame() {
-        message.setText("Make your move!");
-        // set up the black pieces
-        for (int ii = 0; ii < STARTING_ROW.length; ii++) {
-            chessBoardSquares[ii][0].setIcon(new ImageIcon(
-                    chessPieceImages[BLACK][STARTING_ROW[ii]]));
-        }
-        for (int ii = 0; ii < STARTING_ROW.length; ii++) {
-            chessBoardSquares[ii][1].setIcon(new ImageIcon(
-                    chessPieceImages[BLACK][PAWN]));
-        }
-        // set up the white pieces
-        for (int ii = 0; ii < STARTING_ROW.length; ii++) {
-            chessBoardSquares[ii][6].setIcon(new ImageIcon(
-                    chessPieceImages[WHITE][PAWN]));
-        }
-        for (int ii = 0; ii < STARTING_ROW.length; ii++) {
-            chessBoardSquares[ii][7].setIcon(new ImageIcon(
-                    chessPieceImages[WHITE][STARTING_ROW[ii]]));
-        }
-
-    }
-
+    
     public static void main(String[] args) {
-        Runnable r = new Runnable() {
-
-            @Override
-            public void run() {
-                Screen cg = null;
-                try {
-                    cg = new Screen();
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-
-                JFrame f = new JFrame("ChessSabon");
-                f.add(cg.getGui());
-                // Ensures JVM closes after frame(s) closed and
-                // all non-daemon threads are finished
-                f.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-                // See https://stackoverflow.com/a/7143398/418556 for demo.
-                f.setLocationByPlatform(true);
-
-                // ensures the frame is the minimum size it needs to be
-                // in order display the components within it
-                f.pack();
-                // ensures the minimum size is enforced.
-                f.setMinimumSize(f.getSize());
-                f.setVisible(true);
+        SwingUtilities.invokeLater(() -> {
+            try {
+                JFrame frame = new JFrame("Chess");
+                Screen screen = new Screen();
+                frame.setContentPane(screen.getGui());
+                frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+                frame.pack();
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-        };
-        // Swing GUIs should be created and updated on the EDT
-        // http://docs.oracle.com/javase/tutorial/uiswing/concurrency
-        SwingUtilities.invokeLater(r);
+        });
     }
 }
